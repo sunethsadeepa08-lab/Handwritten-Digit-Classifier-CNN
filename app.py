@@ -17,7 +17,7 @@ st.write(
 )
 
 
-# Load Trained Model
+# Load Model
 @st.cache_resource
 def get_model():
     return load_model("mnist_cnn_model.h5")
@@ -26,19 +26,14 @@ def get_model():
 model = get_model()
 
 
-# Ultimate Preprocessing Pipeline (Handles Ballpoint Pen on Paper & Digital Canvas)
+# Preprocessing Pipeline (Paper Photos & Canvas Drawings)
 def preprocess_image(image):
-    # 1. Resize image to standard processing resolution (300x300)
     img_gray = np.array(image.convert("L").resize((300, 300)))
 
-    # 2. Adaptive Pipeline for Paper Photos vs Canvas Drawings
     if np.mean(img_gray) > 127:
-        # Paper Photo Pipeline: CLAHE contrast enhancement for ballpoint pen lines
         clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
         enhanced = clahe.apply(img_gray)
         inv = cv2.bitwise_not(enhanced)
-
-        # Adaptive Gaussian Thresholding to isolate pen strokes from paper shadows
         thresh = cv2.adaptiveThreshold(
             inv,
             255,
@@ -47,31 +42,24 @@ def preprocess_image(image):
             21,
             10,
         )
-
-        # Dilation: Thickens thin 0.5mm pen strokes to match MNIST marker brush size
         kernel = np.ones((5, 5), np.uint8)
         thresh = cv2.dilate(thresh, kernel, iterations=2)
     else:
-        # Canvas Pipeline: Thresholding for white strokes on dark background
         _, thresh = cv2.threshold(img_gray, 50, 255, cv2.THRESH_BINARY)
         kernel = np.ones((3, 3), np.uint8)
         thresh = cv2.dilate(thresh, kernel, iterations=1)
 
-    # 3. Find digit contours and ignore tiny paper noise
     contours, _ = cv2.findContours(
         thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
     )
 
     if contours:
         valid_contours = [c for c in contours if cv2.contourArea(c) > 50]
-
         if valid_contours:
             c = max(valid_contours, key=cv2.contourArea)
             x, y, w, h = cv2.boundingRect(c)
-
             digit = thresh[y : y + h, x : x + w]
 
-            # Fit into 20x20 box preserving aspect ratio
             aspect_ratio = w / float(h)
             if aspect_ratio > 1:
                 new_w = 20
@@ -84,13 +72,11 @@ def preprocess_image(image):
                 digit, (new_w, new_h), interpolation=cv2.INTER_AREA
             )
 
-            # Pad into 28x28 centered frame
             padded = np.zeros((28, 28), dtype=np.uint8)
             pad_x = (28 - new_w) // 2
             pad_y = (28 - new_h) // 2
             padded[pad_y : pad_y + new_h, pad_x : pad_x + new_w] = digit_resized
 
-            # Center using Center of Mass (Standard MNIST Pipeline)
             cy, cx = center_of_mass(padded)
             if not np.isnan(cy) and not np.isnan(cx):
                 shift_x = int(round(14 - cx))
@@ -105,7 +91,7 @@ def preprocess_image(image):
     return resized.reshape(1, 28, 28, 1), cv2.resize(img_gray, (28, 28))
 
 
-# Option Selection: Draw on Canvas or Upload Image
+# Option Selection
 option = st.radio("Choose Input Method:", ("Draw on Canvas", "Upload Image"))
 
 img_to_process = None
@@ -123,8 +109,10 @@ if option == "Draw on Canvas":
         key="canvas",
     )
 
+    # Safe Condition Check
     if (
-        canvas_result.image_data is not None
+        canvas_result is not None
+        and canvas_result.image_data is not None
         and np.max(canvas_result.image_data) > 0
     ):
         img_to_process = Image.fromarray(
@@ -138,7 +126,7 @@ else:
     if uploaded_file is not None:
         img_to_process = Image.open(uploaded_file)
 
-# Processing & Prediction Execution
+# Execution
 if img_to_process is not None:
     processed_img, display_img = preprocess_image(img_to_process)
 
