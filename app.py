@@ -28,7 +28,6 @@ model = get_model()
 
 # Preprocessing Pipeline (Paper Photos & Canvas Drawings)
 def preprocess_image(image):
-    # Convert image to grayscale PIL and numpy array
     img_gray = np.array(image.convert("L").resize((300, 300)))
 
     if np.mean(img_gray) > 127:
@@ -112,16 +111,16 @@ if option == "Draw on Canvas":
         key="canvas",
     )
 
-    # Bulletproof Extraction with Try-Except
-    if canvas_result is not None:
+    # Safe & Direct Canvas Image Extraction
+    if canvas_result is not None and hasattr(canvas_result, "image_data"):
         try:
-            raw_data = canvas_result.image_data
-            if raw_data is not None:
-                img_array = raw_data.astype("uint8")
-                if np.any(img_array[:, :, :3] > 0):
-                    img_to_process = Image.fromarray(img_array).convert("RGB")
-        except Exception:
-            pass
+            arr = canvas_result.image_data
+            if arr is not None and np.sum(arr[:, :, :3]) > 0:
+                img_to_process = Image.fromarray(arr.astype("uint8")).convert(
+                    "RGB"
+                )
+        except Exception as e:
+            st.error(f"Canvas Processing Note: {e}")
 
 else:
     uploaded_file = st.file_uploader(
@@ -130,14 +129,15 @@ else:
     if uploaded_file is not None:
         img_to_process = Image.open(uploaded_file)
 
-# Execution
+# Prediction Execution
 if img_to_process is not None:
     processed_img, display_img = preprocess_image(img_to_process)
 
+    st.subheader("🔍 Prediction Results:")
     st.image(
         display_img,
-        caption="Preprocessed Image (MNIST Centered & Noise Filtered)",
-        width=150,
+        caption="Preprocessed Image (MNIST Centered & Filtered)",
+        width=140,
     )
 
     prediction = model.predict(processed_img)
