@@ -1,9 +1,6 @@
-tensorflow
 streamlit
-pillow
-numpy
-pandas
+tensorflow
 opencv-python-headless
+numpy
+pillow
 scipy
-openpyxl
-streamlit-drawable-canvas
