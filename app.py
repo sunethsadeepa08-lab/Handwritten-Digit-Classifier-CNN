@@ -28,9 +28,11 @@ model = get_model()
 
 # Preprocessing Pipeline (Paper Photos & Canvas Drawings)
 def preprocess_image(image):
+    # Convert image to grayscale PIL and numpy array
     img_gray = np.array(image.convert("L").resize((300, 300)))
 
     if np.mean(img_gray) > 127:
+        # Paper Photo Pipeline
         clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
         enhanced = clahe.apply(img_gray)
         inv = cv2.bitwise_not(enhanced)
@@ -45,7 +47,8 @@ def preprocess_image(image):
         kernel = np.ones((5, 5), np.uint8)
         thresh = cv2.dilate(thresh, kernel, iterations=2)
     else:
-        _, thresh = cv2.threshold(img_gray, 50, 255, cv2.THRESH_BINARY)
+        # Canvas Pipeline
+        _, thresh = cv2.threshold(img_gray, 30, 255, cv2.THRESH_BINARY)
         kernel = np.ones((3, 3), np.uint8)
         thresh = cv2.dilate(thresh, kernel, iterations=1)
 
@@ -54,7 +57,7 @@ def preprocess_image(image):
     )
 
     if contours:
-        valid_contours = [c for c in contours if cv2.contourArea(c) > 50]
+        valid_contours = [c for c in contours if cv2.contourArea(c) > 30]
         if valid_contours:
             c = max(valid_contours, key=cv2.contourArea)
             x, y, w, h = cv2.boundingRect(c)
@@ -100,7 +103,7 @@ if option == "Draw on Canvas":
     st.write("🖌️ **Draw any digit (0–9) using your mouse/touch pad:**")
     canvas_result = st_canvas(
         fill_color="black",
-        stroke_width=18,
+        stroke_width=20,
         stroke_color="white",
         background_color="black",
         height=280,
@@ -109,18 +112,12 @@ if option == "Draw on Canvas":
         key="canvas",
     )
 
-    # Safe Try-Except Extraction to avoid RuntimeError on Canvas Initialization
-    if canvas_result is not None:
-        try:
-            if (
-                canvas_result.image_data is not None
-                and np.max(canvas_result.image_data) > 0
-            ):
-                img_to_process = Image.fromarray(
-                    canvas_result.image_data.astype("uint8")
-                )
-        except Exception:
-            pass
+    # Clean Canvas Extraction Logic
+    if canvas_result is not None and canvas_result.image_data is not None:
+        img_array = canvas_result.image_data.astype("uint8")
+        # Check if user actually drew something on the canvas
+        if np.any(img_array[:, :, :3] > 0):
+            img_to_process = Image.fromarray(img_array).convert("RGB")
 
 else:
     uploaded_file = st.file_uploader(
