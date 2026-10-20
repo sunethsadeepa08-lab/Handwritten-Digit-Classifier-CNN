@@ -1,6 +1,8 @@
-streamlit
 tensorflow
-pandas
-numpy
+streamlit
 pillow
+numpy
+pandas
+opencv-python-headless
+scipy
 openpyxl
