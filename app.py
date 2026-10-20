@@ -112,12 +112,16 @@ if option == "Draw on Canvas":
         key="canvas",
     )
 
-    # Clean Canvas Extraction Logic
-    if canvas_result is not None and canvas_result.image_data is not None:
-        img_array = canvas_result.image_data.astype("uint8")
-        # Check if user actually drew something on the canvas
-        if np.any(img_array[:, :, :3] > 0):
-            img_to_process = Image.fromarray(img_array).convert("RGB")
+    # Bulletproof Extraction with Try-Except
+    if canvas_result is not None:
+        try:
+            raw_data = canvas_result.image_data
+            if raw_data is not None:
+                img_array = raw_data.astype("uint8")
+                if np.any(img_array[:, :, :3] > 0):
+                    img_to_process = Image.fromarray(img_array).convert("RGB")
+        except Exception:
+            pass
 
 else:
     uploaded_file = st.file_uploader(
