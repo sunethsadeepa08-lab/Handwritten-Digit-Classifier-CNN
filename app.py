@@ -13,11 +13,11 @@ st.set_page_config(
 
 st.title("🔢 AI Handwritten Digit Classifier")
 st.write(
-    "Draw a digit on the canvas or upload an image (paper photo) to classify using Deep Learning!"
+    "Upload a photo of a handwritten digit (paper) or draw on the canvas to test the CNN model."
 )
 
 
-# Load Model
+# Load Trained Model
 @st.cache_resource
 def get_model():
     return load_model("mnist_cnn_model.h5")
@@ -26,12 +26,13 @@ def get_model():
 model = get_model()
 
 
-# Preprocessing Pipeline (Paper Photos & Canvas Drawings)
+# Advanced Noise-Free Preprocessing Pipeline
 def preprocess_image(image):
     img_gray = np.array(image.convert("L").resize((300, 300)))
 
+    # Paper Photo vs Canvas Detection
     if np.mean(img_gray) > 127:
-        # Paper Photo Pipeline
+        # Paper Photo Pipeline: Enhancement for thin ballpoint pen strokes
         clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
         enhanced = clahe.apply(img_gray)
         inv = cv2.bitwise_not(enhanced)
@@ -56,7 +57,7 @@ def preprocess_image(image):
     )
 
     if contours:
-        valid_contours = [c for c in contours if cv2.contourArea(c) > 30]
+        valid_contours = [c for c in contours if cv2.contourArea(c) > 20]
         if valid_contours:
             c = max(valid_contours, key=cv2.contourArea)
             x, y, w, h = cv2.boundingRect(c)
@@ -94,40 +95,37 @@ def preprocess_image(image):
 
 
 # Option Selection
-option = st.radio("Choose Input Method:", ("Draw on Canvas", "Upload Image"))
+option = st.radio("Choose Input Method:", ("Upload Image", "Draw on Canvas"))
 
 img_to_process = None
 
-if option == "Draw on Canvas":
-    st.write("🖌️ **Draw any digit (0–9) using your mouse/touch pad:**")
+if option == "Upload Image":
+    uploaded_file = st.file_uploader(
+        "Upload an Image of Digit (PNG/JPG/JPEG)...", type=["png", "jpg", "jpeg"]
+    )
+    if uploaded_file is not None:
+        img_to_process = Image.open(uploaded_file)
+
+else:
+    st.write("🖌️ **Draw a digit (0–9) on the canvas below:**")
     canvas_result = st_canvas(
         fill_color="black",
-        stroke_width=22,
+        stroke_width=25,
         stroke_color="white",
         background_color="black",
         height=280,
         width=280,
         drawing_mode="freedraw",
-        update_streamlit=True,
-        key="canvas",
+        key="digit_canvas",
     )
 
-    if canvas_result is not None:
-        try:
-            arr = canvas_result.image_data
-            if arr is not None and np.max(arr[:, :, :3]) > 0:
-                img_to_process = Image.fromarray(arr.astype("uint8")).convert(
-                    "RGB"
-                )
-        except Exception:
-            pass
-
-else:
-    uploaded_file = st.file_uploader(
-        "Upload an Image (PNG/JPG)...", type=["png", "jpg", "jpeg"]
-    )
-    if uploaded_file is not None:
-        img_to_process = Image.open(uploaded_file)
+    if st.button("🎯 Classify Canvas Digit"):
+        if canvas_result is not None and canvas_result.image_data is not None:
+            arr = canvas_result.image_data.astype("uint8")
+            if np.any(arr[:, :, :3] > 0):
+                img_to_process = Image.fromarray(arr).convert("RGB")
+            else:
+                st.warning("⚠️ Please draw a digit on the canvas first!")
 
 # Prediction Execution
 if img_to_process is not None:
@@ -136,8 +134,8 @@ if img_to_process is not None:
     st.subheader("🔍 Prediction Results:")
     st.image(
         display_img,
-        caption="Preprocessed Image (MNIST Centered & Filtered)",
-        width=140,
+        caption="Preprocessed MNIST Matrix (Centered & Dilation Applied)",
+        width=150,
     )
 
     prediction = model.predict(processed_img)
