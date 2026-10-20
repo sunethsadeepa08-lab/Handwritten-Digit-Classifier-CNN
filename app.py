@@ -102,7 +102,7 @@ if option == "Draw on Canvas":
     st.write("🖌️ **Draw any digit (0–9) using your mouse/touch pad:**")
     canvas_result = st_canvas(
         fill_color="black",
-        stroke_width=20,
+        stroke_width=22,
         stroke_color="white",
         background_color="black",
         height=280,
@@ -111,17 +111,16 @@ if option == "Draw on Canvas":
         key="canvas",
     )
 
-    # Predict Button එකක් මඟින් Safe එකේ Data එක Extract කරගැනීම
-    if st.button("🎯 Predict Digit"):
-        if canvas_result is not None:
-            try:
-                arr = canvas_result.image_data
-                if arr is not None and np.sum(arr[:, :, :3]) > 0:
-                    img_to_process = Image.fromarray(arr.astype("uint8")).convert("RGB")
-                else:
-                    st.warning("⚠️ Please draw a digit on the canvas first!")
-            except Exception:
-                st.warning("⚠️ Please draw a digit on the canvas first!")
+    # Safe Auto-Extraction without needing extra buttons
+    if canvas_result is not None:
+        try:
+            arr = canvas_result.image_data
+            if arr is not None and np.max(arr[:, :, :3]) > 0:
+                img_to_process = Image.fromarray(arr.astype("uint8")).convert(
+                    "RGB"
+                )
+        except Exception:
+            pass
 
 else:
     uploaded_file = st.file_uploader(
