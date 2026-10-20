@@ -99,7 +99,7 @@ option = st.radio("Choose Input Method:", ("Draw on Canvas", "Upload Image"))
 img_to_process = None
 
 if option == "Draw on Canvas":
-    st.write("`🖌️` **Draw any digit (0–9) using your mouse/touch pad:**")
+    st.write("🖌️ **Draw any digit (0–9) using your mouse/touch pad:**")
     canvas_result = st_canvas(
         fill_color="black",
         stroke_width=22,
