@@ -25,7 +25,7 @@ def get_model():
 model = get_model()
 
 
-# Advance MNIST-Style Preprocessing (Center of Mass + Bounding Box)
+# Ultimate MNIST-Style Preprocessing (Thickening + Bounding Box + Center of Mass)
 def preprocess_image(image):
     gray = np.array(image.convert("L"))
 
@@ -35,6 +35,10 @@ def preprocess_image(image):
 
     # Binarize
     _, thresh = cv2.threshold(gray, 50, 255, cv2.THRESH_BINARY)
+
+    # Thicken thin lines (Dilation) so it matches MNIST brush thickness
+    kernel = np.ones((3, 3), np.uint8)
+    thresh = cv2.dilate(thresh, kernel, iterations=1)
 
     # Find digit bounding box
     coords = cv2.findNonZero(thresh)
@@ -87,7 +91,7 @@ if uploaded_file is not None:
 
     st.image(
         display_img,
-        caption="Preprocessed Image (MNIST Centered Style)",
+        caption="Preprocessed Image (MNIST Centered & Thickened)",
         width=150,
     )
 
