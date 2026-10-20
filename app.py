@@ -3,6 +3,7 @@ import numpy as np
 import streamlit as st
 from PIL import Image
 from scipy.ndimage import center_of_mass
+from streamlit_drawable_canvas import st_canvas
 from tensorflow.keras.models import load_model
 
 # Page Configuration
@@ -12,7 +13,7 @@ st.set_page_config(
 
 st.title("🔢 AI Handwritten Digit Classifier")
 st.write(
-    "Upload an image of a handwritten digit (0–9) to test the trained Deep Learning Model."
+    "Draw a digit on the canvas or upload an image (paper photo) to classify using Deep Learning!"
 )
 
 
@@ -25,35 +26,43 @@ def get_model():
 model = get_model()
 
 
-# Perfect Noise-Free Preprocessing Pipeline for Real Phone Photos & Canvas
+# Ultimate Preprocessing Pipeline (Handles Ballpoint Pen on Paper & Digital Canvas)
 def preprocess_image(image):
-    # 1. Resize large phone photo to standard processing resolution (300x300)
-    image_resized = image.convert("L").resize((300, 300))
-    gray = np.array(image_resized)
+    # 1. Resize image to standard processing resolution (300x300)
+    img_gray = np.array(image.convert("L").resize((300, 300)))
 
-    # 2. Smooth out paper grain/noise using Gaussian Blur
-    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    # 2. Adaptive Pipeline for Paper Photos vs Canvas Drawings
+    if np.mean(img_gray) > 127:
+        # Paper Photo Pipeline: CLAHE contrast enhancement for ballpoint pen lines
+        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+        enhanced = clahe.apply(img_gray)
+        inv = cv2.bitwise_not(enhanced)
 
-    # 3. Ensure dark digit on light paper becomes white digit on black background
-    if np.mean(blurred) > 127:
-        blurred = 255 - blurred
+        # Adaptive Gaussian Thresholding to isolate pen strokes from paper shadows
+        thresh = cv2.adaptiveThreshold(
+            inv,
+            255,
+            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY,
+            21,
+            10,
+        )
 
-    # 4. Otsu Thresholding to cleanly separate digit from paper background
-    _, thresh = cv2.threshold(
-        blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
-    )
+        # Dilation: Thickens thin 0.5mm pen strokes to match MNIST marker brush size
+        kernel = np.ones((5, 5), np.uint8)
+        thresh = cv2.dilate(thresh, kernel, iterations=2)
+    else:
+        # Canvas Pipeline: Thresholding for white strokes on dark background
+        _, thresh = cv2.threshold(img_gray, 50, 255, cv2.THRESH_BINARY)
+        kernel = np.ones((3, 3), np.uint8)
+        thresh = cv2.dilate(thresh, kernel, iterations=1)
 
-    # 5. Dilation to make thin pen strokes thick like MNIST brush lines
-    kernel = np.ones((3, 3), np.uint8)
-    thresh = cv2.dilate(thresh, kernel, iterations=2)
-
-    # 6. Find all contours and pick ONLY the largest connected shape (the handwritten digit)
+    # 3. Find digit contours and ignore tiny paper noise
     contours, _ = cv2.findContours(
         thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
     )
 
     if contours:
-        # Ignore tiny noise artifacts (< 50 pixels)
         valid_contours = [c for c in contours if cv2.contourArea(c) > 50]
 
         if valid_contours:
@@ -62,7 +71,7 @@ def preprocess_image(image):
 
             digit = thresh[y : y + h, x : x + w]
 
-            # Aspect ratio resize into 20x20 box preserving original shape
+            # Fit into 20x20 box preserving aspect ratio
             aspect_ratio = w / float(h)
             if aspect_ratio > 1:
                 new_w = 20
@@ -92,26 +101,53 @@ def preprocess_image(image):
             normalized = padded / 255.0
             return normalized.reshape(1, 28, 28, 1), padded
 
-    resized = cv2.resize(gray, (28, 28)) / 255.0
-    return resized.reshape(1, 28, 28, 1), cv2.resize(gray, (28, 28))
+    resized = cv2.resize(img_gray, (28, 28)) / 255.0
+    return resized.reshape(1, 28, 28, 1), cv2.resize(img_gray, (28, 28))
 
 
-# File Uploader
-uploaded_file = st.file_uploader(
-    "Upload an Image (PNG/JPG)...", type=["png", "jpg", "jpeg"]
-)
+# Option Selection: Draw on Canvas or Upload Image
+option = st.radio("Choose Input Method:", ("Draw on Canvas", "Upload Image"))
 
-if uploaded_file is not None:
-    img = Image.open(uploaded_file)
-    processed_img, display_img = preprocess_image(img)
+img_to_process = None
+
+if option == "Draw on Canvas":
+    st.write("🖌️ **Draw any digit (0–9) using your mouse/touch pad:**")
+    canvas_result = st_canvas(
+        fill_color="black",
+        stroke_width=18,
+        stroke_color="white",
+        background_color="black",
+        height=280,
+        width=280,
+        drawing_mode="freedraw",
+        key="canvas",
+    )
+
+    if (
+        canvas_result.image_data is not None
+        and np.max(canvas_result.image_data) > 0
+    ):
+        img_to_process = Image.fromarray(
+            canvas_result.image_data.astype("uint8")
+        )
+
+else:
+    uploaded_file = st.file_uploader(
+        "Upload an Image (PNG/JPG)...", type=["png", "jpg", "jpeg"]
+    )
+    if uploaded_file is not None:
+        img_to_process = Image.open(uploaded_file)
+
+# Processing & Prediction Execution
+if img_to_process is not None:
+    processed_img, display_img = preprocess_image(img_to_process)
 
     st.image(
         display_img,
-        caption="Preprocessed Image (Noise-Free Centered MNIST)",
+        caption="Preprocessed Image (MNIST Centered & Noise Filtered)",
         width=150,
     )
 
-    # Prediction
     prediction = model.predict(processed_img)
     predicted_digit = np.argmax(prediction)
     confidence = float(np.max(prediction)) * 100
