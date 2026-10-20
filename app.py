@@ -26,13 +26,13 @@ def get_model():
 model = get_model()
 
 
-# Advanced Noise-Free Preprocessing Pipeline
+# Advanced Preprocessing Pipeline
 def preprocess_image(image):
     img_gray = np.array(image.convert("L").resize((300, 300)))
 
     # Paper Photo vs Canvas Detection
     if np.mean(img_gray) > 127:
-        # Paper Photo Pipeline: Enhancement for thin ballpoint pen strokes
+        # Paper Photo Pipeline: CLAHE contrast enhancement & Adaptive Thresholding
         clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
         enhanced = clahe.apply(img_gray)
         inv = cv2.bitwise_not(enhanced)
@@ -80,6 +80,7 @@ def preprocess_image(image):
             pad_y = (28 - new_h) // 2
             padded[pad_y : pad_y + new_h, pad_x : pad_x + new_w] = digit_resized
 
+            # Center of Mass Alignment
             cy, cx = center_of_mass(padded)
             if not np.isnan(cy) and not np.isnan(cx):
                 shift_x = int(round(14 - cx))
@@ -120,10 +121,19 @@ else:
     )
 
     if st.button("🎯 Classify Canvas Digit"):
-        if canvas_result is not None and canvas_result.image_data is not None:
-            arr = canvas_result.image_data.astype("uint8")
-            if np.any(arr[:, :, :3] > 0):
-                img_to_process = Image.fromarray(arr).convert("RGB")
+        if canvas_result is not None:
+            raw_data = None
+            try:
+                raw_data = canvas_result.image_data
+            except Exception:
+                raw_data = None
+
+            if raw_data is not None:
+                arr = raw_data.astype("uint8")
+                if np.any(arr[:, :, :3] > 0):
+                    img_to_process = Image.fromarray(arr).convert("RGB")
+                else:
+                    st.warning("⚠️ Please draw a digit on the canvas first!")
             else:
                 st.warning("⚠️ Please draw a digit on the canvas first!")
 
@@ -134,7 +144,7 @@ if img_to_process is not None:
     st.subheader("🔍 Prediction Results:")
     st.image(
         display_img,
-        caption="Preprocessed MNIST Matrix (Centered & Dilation Applied)",
+        caption="Preprocessed MNIST Matrix (Centered & Filtered)",
         width=150,
     )
 
