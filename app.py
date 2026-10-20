@@ -120,22 +120,24 @@ else:
         key="digit_canvas",
     )
 
-    if st.button("🎯 Classify Canvas Digit"):
-        if canvas_result is not None:
-            raw_data = None
-            try:
-                raw_data = canvas_result.image_data
-            except Exception:
-                raw_data = None
+    # Save drawing into Session State memory so it persists during button clicks
+    if canvas_result is not None:
+        try:
+            data = canvas_result.image_data
+            if data is not None and np.max(data[:, :, :3]) > 0:
+                st.session_state["saved_canvas_img"] = data
+        except Exception:
+            pass
 
-            if raw_data is not None:
-                arr = raw_data.astype("uint8")
-                if np.any(arr[:, :, :3] > 0):
-                    img_to_process = Image.fromarray(arr).convert("RGB")
-                else:
-                    st.warning("⚠️ Please draw a digit on the canvas first!")
+    if st.button("🎯 Classify Canvas Digit"):
+        if "saved_canvas_img" in st.session_state:
+            arr = st.session_state["saved_canvas_img"].astype("uint8")
+            if np.any(arr[:, :, :3] > 0):
+                img_to_process = Image.fromarray(arr).convert("RGB")
             else:
                 st.warning("⚠️ Please draw a digit on the canvas first!")
+        else:
+            st.warning("⚠️ Please draw a digit on the canvas first!")
 
 # Prediction Execution
 if img_to_process is not None:
