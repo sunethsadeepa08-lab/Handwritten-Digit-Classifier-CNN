@@ -26,13 +26,13 @@ def get_model():
 model = get_model()
 
 
-# Advanced Preprocessing Pipeline
+# Advanced Noise-Free Preprocessing Pipeline
 def preprocess_image(image):
     img_gray = np.array(image.convert("L").resize((300, 300)))
 
     # Paper Photo vs Canvas Detection
     if np.mean(img_gray) > 127:
-        # Paper Photo Pipeline: CLAHE contrast enhancement & Adaptive Thresholding
+        # Paper Photo Pipeline: Enhancement for thin ballpoint pen strokes
         clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
         enhanced = clahe.apply(img_gray)
         inv = cv2.bitwise_not(enhanced)
@@ -120,24 +120,16 @@ else:
         key="digit_canvas",
     )
 
-    # Save drawing into Session State memory so it persists during button clicks
+    # Automatically extract image data when mouse is released
     if canvas_result is not None:
         try:
-            data = canvas_result.image_data
-            if data is not None and np.max(data[:, :, :3]) > 0:
-                st.session_state["saved_canvas_img"] = data
+            arr = canvas_result.image_data
+            if arr is not None and np.any(arr[:, :, :3] > 0):
+                img_to_process = Image.fromarray(arr.astype("uint8")).convert(
+                    "RGB"
+                )
         except Exception:
             pass
-
-    if st.button("🎯 Classify Canvas Digit"):
-        if "saved_canvas_img" in st.session_state:
-            arr = st.session_state["saved_canvas_img"].astype("uint8")
-            if np.any(arr[:, :, :3] > 0):
-                img_to_process = Image.fromarray(arr).convert("RGB")
-            else:
-                st.warning("⚠️ Please draw a digit on the canvas first!")
-        else:
-            st.warning("⚠️ Please draw a digit on the canvas first!")
 
 # Prediction Execution
 if img_to_process is not None:
