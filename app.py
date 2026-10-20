@@ -25,47 +25,49 @@ def get_model():
 model = get_model()
 
 
-# Advanced Shadow-Removal & Adaptive Preprocessing
+# Advanced Phone Photo & Canvas Preprocessing (Background Division & Blackhat)
 def preprocess_image(image):
     gray = np.array(image.convert("L"))
 
-    # Remove background shadows using Adaptive Gaussian Thresholding
-    # Works for both white paper phone photos and digital paint dark/white canvas
+    # Check if image is light background (phone photo) or dark background (digital canvas)
     if np.mean(gray) > 127:
-        # For paper photos with light background
-        inv_gray = cv2.bitwise_not(gray)
-        thresh = cv2.adaptiveThreshold(
-            inv_gray,
-            255,
-            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-            cv2.THRESH_BINARY,
-            21,
-            10,
+        # Background Division: Removes paper shadows & uneven lighting
+        dilated = cv2.dilate(gray, np.ones((7, 7), np.uint8))
+        bg_img = cv2.medianBlur(dilated, 21)
+        diff_img = 255 - cv2.absdiff(gray, bg_img)
+        norm_img = cv2.normalize(
+            diff_img, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX
         )
+
+        # Invert so digit is white (255) and background is black (0)
+        inv = 255 - norm_img
+
+        # Thresholding
+        _, thresh = cv2.threshold(inv, 30, 255, cv2.THRESH_BINARY)
     else:
-        # For dark canvas drawings
+        # For dark background canvas drawings
         _, thresh = cv2.threshold(gray, 50, 255, cv2.THRESH_BINARY)
 
-    # Thicken thin ballpoint pen lines to match MNIST brush size
+    # Thicken thin ballpoint pen strokes to match MNIST training brush thickness
     kernel = np.ones((3, 3), np.uint8)
     thresh = cv2.dilate(thresh, kernel, iterations=2)
 
-    # Find contours and filter out small noise dots
+    # Find digit contours and filter small paper noise
     contours, _ = cv2.findContours(
         thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
     )
 
     if contours:
-        # Find the contour that resembles the actual digit (ignoring tiny dots)
-        contours = [c for c in contours if cv2.contourArea(c) > 20]
+        # Filter contours with reasonable area
+        valid_contours = [c for c in contours if cv2.contourArea(c) > 10]
 
-        if contours:
-            c = max(contours, key=cv2.contourArea)
+        if valid_contours:
+            c = max(valid_contours, key=cv2.contourArea)
             x, y, w, h = cv2.boundingRect(c)
 
             digit = thresh[y : y + h, x : x + w]
 
-            # Aspect ratio resize into 20x20 box
+            # Fit inside 20x20 box preserving aspect ratio
             aspect_ratio = w / float(h)
             if aspect_ratio > 1:
                 new_w = 20
@@ -84,7 +86,7 @@ def preprocess_image(image):
             pad_y = (28 - new_h) // 2
             padded[pad_y : pad_y + new_h, pad_x : pad_x + new_w] = digit_resized
 
-            # Center using Center of Mass
+            # Center using Center of Mass (MNIST Standard)
             cy, cx = center_of_mass(padded)
             if not np.isnan(cy) and not np.isnan(cx):
                 shift_x = int(round(14 - cx))
@@ -109,7 +111,9 @@ if uploaded_file is not None:
     processed_img, display_img = preprocess_image(img)
 
     st.image(
-        display_img, caption="Preprocessed Image (Adaptive MNIST)", width=150
+        display_img,
+        caption="Preprocessed Image (Shadow Corrected & Centered)",
+        width=150,
     )
 
     # Prediction
