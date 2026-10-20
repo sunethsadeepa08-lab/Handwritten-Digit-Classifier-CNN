@@ -26,12 +26,13 @@ def get_model():
 model = get_model()
 
 
-# Preprocessing Pipeline (Paper Photos & Canvas Drawings)
+# Advanced Preprocessing Pipeline for Paper Photos & Live Canvas
 def preprocess_image(image):
+    # Convert image to grayscale PIL and numpy array
     img_gray = np.array(image.convert("L").resize((300, 300)))
 
     if np.mean(img_gray) > 127:
-        # Paper Photo Pipeline
+        # Paper Photo Pipeline: Enhancement for thin ballpoint pen lines
         clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
         enhanced = clahe.apply(img_gray)
         inv = cv2.bitwise_not(enhanced)
@@ -46,7 +47,7 @@ def preprocess_image(image):
         kernel = np.ones((5, 5), np.uint8)
         thresh = cv2.dilate(thresh, kernel, iterations=2)
     else:
-        # Canvas Pipeline
+        # Canvas Pipeline: Thresholding for white strokes on dark background
         _, thresh = cv2.threshold(img_gray, 30, 255, cv2.THRESH_BINARY)
         kernel = np.ones((3, 3), np.uint8)
         thresh = cv2.dilate(thresh, kernel, iterations=1)
@@ -79,6 +80,7 @@ def preprocess_image(image):
             pad_y = (28 - new_h) // 2
             padded[pad_y : pad_y + new_h, pad_x : pad_x + new_w] = digit_resized
 
+            # Center using Center of Mass (MNIST Standard)
             cy, cx = center_of_mass(padded)
             if not np.isnan(cy) and not np.isnan(cx):
                 shift_x = int(round(14 - cx))
@@ -111,16 +113,18 @@ if option == "Draw on Canvas":
         key="canvas",
     )
 
-    # Safe & Direct Canvas Image Extraction
-    if canvas_result is not None and hasattr(canvas_result, "image_data"):
+    # Completely Safe Canvas Data Fetching
+    if canvas_result is not None:
+        raw_arr = None
         try:
-            arr = canvas_result.image_data
-            if arr is not None and np.sum(arr[:, :, :3]) > 0:
-                img_to_process = Image.fromarray(arr.astype("uint8")).convert(
-                    "RGB"
-                )
-        except Exception as e:
-            st.error(f"Canvas Processing Note: {e}")
+            raw_arr = canvas_result.image_data
+        except Exception:
+            raw_arr = None
+
+        if raw_arr is not None:
+            arr = raw_arr.astype("uint8")
+            if np.sum(arr[:, :, :3]) > 0:
+                img_to_process = Image.fromarray(arr).convert("RGB")
 
 else:
     uploaded_file = st.file_uploader(
@@ -141,7 +145,7 @@ if img_to_process is not None:
     )
 
     prediction = model.predict(processed_img)
-    predicted_digit = np.argmax(prediction)
+    predicted_digit = int(np.argmax(prediction))
     confidence = float(np.max(prediction)) * 100
 
     st.success(f"🎯 **Predicted Digit: {predicted_digit}**")
