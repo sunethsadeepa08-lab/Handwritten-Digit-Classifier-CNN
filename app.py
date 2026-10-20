@@ -25,41 +25,36 @@ def get_model():
 model = get_model()
 
 
-# Advanced Phone Photo & Canvas Preprocessing (Background Division & Blackhat)
+# Perfect Noise-Free Preprocessing Pipeline for Real Phone Photos & Canvas
 def preprocess_image(image):
-    gray = np.array(image.convert("L"))
+    # 1. Resize large phone photo to standard processing resolution (300x300)
+    image_resized = image.convert("L").resize((300, 300))
+    gray = np.array(image_resized)
 
-    # Check if image is light background (phone photo) or dark background (digital canvas)
-    if np.mean(gray) > 127:
-        # Background Division: Removes paper shadows & uneven lighting
-        dilated = cv2.dilate(gray, np.ones((7, 7), np.uint8))
-        bg_img = cv2.medianBlur(dilated, 21)
-        diff_img = 255 - cv2.absdiff(gray, bg_img)
-        norm_img = cv2.normalize(
-            diff_img, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX
-        )
+    # 2. Smooth out paper grain/noise using Gaussian Blur
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
 
-        # Invert so digit is white (255) and background is black (0)
-        inv = 255 - norm_img
+    # 3. Ensure dark digit on light paper becomes white digit on black background
+    if np.mean(blurred) > 127:
+        blurred = 255 - blurred
 
-        # Thresholding
-        _, thresh = cv2.threshold(inv, 30, 255, cv2.THRESH_BINARY)
-    else:
-        # For dark background canvas drawings
-        _, thresh = cv2.threshold(gray, 50, 255, cv2.THRESH_BINARY)
+    # 4. Otsu Thresholding to cleanly separate digit from paper background
+    _, thresh = cv2.threshold(
+        blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
+    )
 
-    # Thicken thin ballpoint pen strokes to match MNIST training brush thickness
+    # 5. Dilation to make thin pen strokes thick like MNIST brush lines
     kernel = np.ones((3, 3), np.uint8)
     thresh = cv2.dilate(thresh, kernel, iterations=2)
 
-    # Find digit contours and filter small paper noise
+    # 6. Find all contours and pick ONLY the largest connected shape (the handwritten digit)
     contours, _ = cv2.findContours(
         thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
     )
 
     if contours:
-        # Filter contours with reasonable area
-        valid_contours = [c for c in contours if cv2.contourArea(c) > 10]
+        # Ignore tiny noise artifacts (< 50 pixels)
+        valid_contours = [c for c in contours if cv2.contourArea(c) > 50]
 
         if valid_contours:
             c = max(valid_contours, key=cv2.contourArea)
@@ -67,7 +62,7 @@ def preprocess_image(image):
 
             digit = thresh[y : y + h, x : x + w]
 
-            # Fit inside 20x20 box preserving aspect ratio
+            # Aspect ratio resize into 20x20 box preserving original shape
             aspect_ratio = w / float(h)
             if aspect_ratio > 1:
                 new_w = 20
@@ -86,7 +81,7 @@ def preprocess_image(image):
             pad_y = (28 - new_h) // 2
             padded[pad_y : pad_y + new_h, pad_x : pad_x + new_w] = digit_resized
 
-            # Center using Center of Mass (MNIST Standard)
+            # Center using Center of Mass (Standard MNIST Pipeline)
             cy, cx = center_of_mass(padded)
             if not np.isnan(cy) and not np.isnan(cx):
                 shift_x = int(round(14 - cx))
@@ -112,7 +107,7 @@ if uploaded_file is not None:
 
     st.image(
         display_img,
-        caption="Preprocessed Image (Shadow Corrected & Centered)",
+        caption="Preprocessed Image (Noise-Free Centered MNIST)",
         width=150,
     )
 
