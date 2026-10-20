@@ -108,10 +108,11 @@ if option == "Draw on Canvas":
         height=280,
         width=280,
         drawing_mode="freedraw",
+        update_streamlit=True,
+        realtime_update=True,
         key="canvas",
     )
 
-    # Safe Auto-Extraction without needing extra buttons
     if canvas_result is not None:
         try:
             arr = canvas_result.image_data
