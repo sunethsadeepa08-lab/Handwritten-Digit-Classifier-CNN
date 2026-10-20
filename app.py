@@ -109,15 +109,18 @@ if option == "Draw on Canvas":
         key="canvas",
     )
 
-    # Safe Condition Check
-    if (
-        canvas_result is not None
-        and canvas_result.image_data is not None
-        and np.max(canvas_result.image_data) > 0
-    ):
-        img_to_process = Image.fromarray(
-            canvas_result.image_data.astype("uint8")
-        )
+    # Safe Try-Except Extraction to avoid RuntimeError on Canvas Initialization
+    if canvas_result is not None:
+        try:
+            if (
+                canvas_result.image_data is not None
+                and np.max(canvas_result.image_data) > 0
+            ):
+                img_to_process = Image.fromarray(
+                    canvas_result.image_data.astype("uint8")
+                )
+        except Exception:
+            pass
 
 else:
     uploaded_file = st.file_uploader(
